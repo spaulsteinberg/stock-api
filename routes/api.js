@@ -15,13 +15,21 @@ router.get('/', (request, response) => {
 })
 //convert form data in mongoose model, save user in database
 router.post('/register', (request, response) => {
-    let user = new User(request.body);
-    user.save()
-    .then(registeredUser => {
-        response.status(200).send(registeredUser)
-    })
-    .catch(error => {
-        response.status(400).send(error)
+    // see if the username already exists. if it does not add them
+    User.findOne({username: request.body.username}, (error, user) => {
+        if (error) response.status(500).send({status: 1});
+        else if (user){
+            response.status(401).send({status: 2});
+        } else {
+            let user = new User(request.body);
+            user.save()
+            .then(registeredUser => {
+                response.status(200).send(registeredUser)
+            })
+            .catch(error => {
+                response.status(400).send(error)
+            })
+        }
     })
 })
 

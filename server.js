@@ -1,10 +1,11 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const cors = require('cors');
 const api = require('./routes/api'); // import the routes module
 
 const app = express();
 const PORT = 3000;
-
+app.use(cors());
 app.use(bodyParser.json());
 
 app.use('/api', api); //localhost:3000/api will now use the routes from api.js
