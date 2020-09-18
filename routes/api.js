@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
 const User = require('../models/users');
 const db = "mongodb+srv://chunkles_berg74:56E0sC8TJzvIJh3H@stocks.wfo6x.mongodb.net/users?retryWrites=true&w=majority"
 
@@ -24,7 +25,9 @@ router.post('/register', (request, response) => {
             let user = new User(request.body);
             user.save()
             .then(registeredUser => {
-                response.status(200).send(registeredUser)
+                let payload = { subject: registeredUser._id };
+                let token = jwt.sign(payload, 'secretKey'); //jwt.sign creates a new token...takes payload/secret key
+                response.status(200).send({token})
             })
             .catch(error => {
                 response.status(400).send(error)
@@ -41,17 +44,19 @@ router.post('/login', (request, response) => {
         else if (!user || user.password !== request.body.password) {
             response.status(401).send("Incorrect username or password.")
         } else {
-            response.status(200).send(user)
+            let payload = { subject: user._id };
+            let token = jwt.sign(payload, 'secretKey');
+            response.status(200).send({token})
         }
     })
 })
 
 // get the list of subscribed stocks by username
 router.get('/userlist', (request, response) => {
-    const placeholderForBelow = 'spaulsteinberg12';
+    //const placeholderForBelow = 'spaulsteinberg12';
     // GET /something?color1=red&color2=blue
     // ^^^ access parameters with 'query'....ex: req.query.color1 === 'red'
-    User.findOne({username: placeholderForBelow})
+    User.findOne({username: request.query.user})
         .select('stocksTracking -_id')
         .exec(function(err, user){
             if (err) console.log(err);
