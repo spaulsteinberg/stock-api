@@ -3,8 +3,11 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const User = require('../models/users');
+const {nanoid} = require('nanoid');
+const bcrypt = require('bcryptjs');
+const { request } = require('express');
 const db = "mongodb+srv://chunkles_berg74:56E0sC8TJzvIJh3H@stocks.wfo6x.mongodb.net/users?retryWrites=true&w=majority"
-
+const secret_key = nanoid();
 // connect to mongodb hosted on mlab
 mongoose.connect(db, {useNewUrlParser: true, useUnifiedTopology: true}, err => {
     console.log(err ? err : "Connected to mongodb");
@@ -22,15 +25,22 @@ router.post('/register', (request, response) => {
         else if (user){
             response.status(401).send({status: 2});
         } else {
-            let user = new User(request.body);
-            user.save()
-            .then(registeredUser => {
-                let payload = { subject: registeredUser._id };
-                let token = jwt.sign(payload, 'secretKey'); //jwt.sign creates a new token...takes payload/secret key
-                response.status(200).send({token})
-            })
-            .catch(error => {
-                response.status(400).send(error)
+            bcrypt.hash(request.body.password, 8, function(err, hash){
+                if (err) response.status(500).send({status: 1});
+                else {
+                    request.body.password = hash;
+                    console.log(hash);
+                    let user = new User(request.body);
+                    user.save()
+                    .then(registeredUser => {
+                        let payload = { subject: registeredUser._id };
+                        let token = jwt.sign(payload, secret_key); //jwt.sign creates a new token...takes payload/secret key
+                        response.status(200).send({'token': token, 'id': registeredUser._id})
+                    })
+                    .catch(error => {
+                        response.status(400).send(error)
+                    })
+                }
             })
         }
     })
@@ -41,27 +51,76 @@ router.post('/register', (request, response) => {
 router.post('/login', (request, response) => {
     User.findOne({username: request.body.username}, (error, user) => {
         if (error) console.log("Error occurred.");
-        else if (!user || user.password !== request.body.password) {
-            response.status(401).send("Incorrect username or password.")
-        } else {
-            let payload = { subject: user._id };
-            let token = jwt.sign(payload, 'secretKey');
-            response.status(200).send({token})
+        else if (!user){
+            response.status(401).send("Incorrect username or password.");
+        }
+        else {
+            // MUST be candidate and then what is stored in db
+            bcrypt.compare(request.body.password, user.password, (err, res) =>{
+                if (err) response.status(500).send({status: 1});
+                else if (res){
+                    let payload = { subject: user._id };
+                    let token = jwt.sign(payload, secret_key);
+                    response.status(200).send({'token': token, 'id': user._id})
+                } else {
+                    response.status(401).send("Incorrect username or password.");
+                }
+            })
         }
     })
 })
 
+//verify token auth, split at space to get Bearer token, next tells express we are done here and to move on
+function verifyTokenAuth(request, response, next){
+    if (!request.headers.authorization){
+        return response.status(401).send({status: 2, message: "No authorization"});
+    }
+    let token = request.headers.authorization.split(' ')[1];
+    if (token === null) return response.status(401).send({status: 2, message: "Null token"});
+    try {
+        let payload = jwt.verify(token, secret_key);
+        request.userId = payload.subject;
+        next();
+    } catch (err) {
+        return response.status(401).send({status: 2, message: "Error making token"});
+    }
+}
+
 // get the list of subscribed stocks by username
-router.get('/userlist', (request, response) => {
+router.get('/userlist', verifyTokenAuth, (request, response) => {
     //const placeholderForBelow = 'spaulsteinberg12';
     // GET /something?color1=red&color2=blue
     // ^^^ access parameters with 'query'....ex: req.query.color1 === 'red'
-    User.findOne({username: request.query.user})
+    User.findById({_id: request.query.user})
         .select('stocksTracking -_id')
         .exec(function(err, user){
-            if (err) console.log(err);
-            else response.json(user);
+            if (err) response.status(500).send({status: 1});
+            else return response.json(user);
         })
+})
+
+router.patch('/addstock', verifyTokenAuth, (request, response) => {
+    User.findById({_id : request.query.user}, (error, user) => {
+        console.log(user);
+        if (error) return response.status(500).send({status: 2});
+        else if (user.stocksTracking.includes(request.body.symbol)) return response.status(400).send({status: 3}); 
+        else {
+            User.updateOne({_id : request.query.user}, {$push : {stocksTracking: request.body.symbol}}, (error, user) => {
+                if (error) return response.status(500).send("Server error");
+                else {
+                    return response.status(200).send({status: 'OK'});
+                }
+            })
+        }
+    })
+})
+
+router.delete('/deletestock', verifyTokenAuth, (request, response) => {
+    User.findOneAndUpdate({_id: request.query.user}, {$pull: {stocksTracking: request.body.symbol}},
+        {new: true}, (error, user) => {
+            if (error) return response.status(500).send({status: 2});
+            else return response.status(200).send();
+    })
 })
 
 // export the router to be used by server
