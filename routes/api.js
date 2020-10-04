@@ -6,6 +6,8 @@ const User = require('../models/users');
 const {nanoid} = require('nanoid');
 const bcrypt = require('bcryptjs');
 const { request } = require('express');
+const fs = require('fs');
+const readline = require('readline');
 const db = "mongodb+srv://chunkles_berg74:56E0sC8TJzvIJh3H@stocks.wfo6x.mongodb.net/users?retryWrites=true&w=majority"
 const secret_key = nanoid();
 // connect to mongodb hosted on mlab
@@ -13,7 +15,7 @@ mongoose.connect(db, {useNewUrlParser: true, useUnifiedTopology: true}, err => {
     console.log(err ? err : "Connected to mongodb");
 })
 
-
+// root of the routes
 router.get('/', (request, response) => {
     response.send("Sent from routes");
 })
@@ -45,6 +47,46 @@ router.post('/register', (request, response) => {
         }
     })
 })
+// retrieve the master list of all possible stocks asynchronously
+router.get('/retrievestocks', async (request, response) => {
+    try {
+        const nyse = await readNyse();
+        const nasdaq = await readNasdaq();
+        console.log(nyse);
+        console.log(nasdaq);
+        return response.status(200).send({"nyse": nyse.sort(), "nasdaq": nasdaq.sort()});
+    } catch (err){
+        console.log(err);
+        return response.status(500).send();
+    }
+})
+
+// read the nyse symbols
+async function readNyse(){
+    const fileStream1 = fs.createReadStream('./info-files/outputnyse.txt', 'utf-8');
+    const rl = readline.createInterface({
+        input: fileStream1,
+        crlfDelay: Infinity
+    });
+    let nyseList = []; 
+    for await (const line of rl) {
+        nyseList.push(line);
+    }
+    return nyseList;
+}
+// read the nasdaq symbols
+async function readNasdaq(){
+    const fileStream2 = fs.createReadStream('./info-files/outputsymbols.txt', 'utf-8');
+    const r2 = readline.createInterface({
+        input: fileStream2,
+        crlfDelay: Infinity
+    });
+    let nasdaqList = [];
+    for await (const line of r2) {
+        nasdaqList.push(line);
+    }
+    return nasdaqList;
+}
 
 // search for username in db. If an error occurs print it. 
 // If the user is not found or the passwords do not match send a 401 unauthorized response. Else, the login is a success
