@@ -52,8 +52,6 @@ router.get('/retrievestocks', async (request, response) => {
     try {
         const nyse = await readNyse();
         const nasdaq = await readNasdaq();
-        console.log(nyse);
-        console.log(nasdaq);
         return response.status(200).send({"nyse": nyse.sort(), "nasdaq": nasdaq.sort()});
     } catch (err){
         console.log(err);
@@ -141,29 +139,29 @@ router.get('/userlist', verifyTokenAuth, (request, response) => {
         })
 })
 
-router.patch('/addstock', verifyTokenAuth, (request, response) => {
-    User.findById({_id : request.query.user}, (error, user) => {
-        console.log(user);
-        if (error) return response.status(500).send({status: 2});
-        else if (user.stocksTracking.includes(request.body.symbol)) return response.status(400).send({status: 3}); 
-        else {
-            User.updateOne({_id : request.query.user}, {$push : {stocksTracking: request.body.symbol}}, (error, user) => {
-                if (error) return response.status(500).send("Server error");
-                else {
-                    return response.status(200).send({status: 'OK'});
-                }
-            })
-        }
-    })
-})
-
-router.delete('/deletestock', verifyTokenAuth, (request, response) => {
-    User.findOneAndUpdate({_id: request.query.user}, {$pull: {stocksTracking: request.body.symbol}},
-        {new: true}, (error, user) => {
+router.route('/stock')
+    .patch(verifyTokenAuth, async (request, response) => {
+        User.findById({_id : request.query.user}, (error, user) => {
+            console.log(user);
             if (error) return response.status(500).send({status: 2});
-            else return response.status(200).send();
+            else if (user.stocksTracking.includes(request.body.symbol)) return response.status(400).send({status: 3}); 
+            else {
+                User.updateOne({_id : request.query.user}, {$push : {stocksTracking: request.body.symbol}}, (error, user) => {
+                    if (error) return response.status(500).send("Server error");
+                    else {
+                        return response.status(200).send({status: 'OK'});
+                    }
+                })
+            }
+        })
     })
-})
+    .delete(verifyTokenAuth, async (request, response) => {
+        User.findOneAndUpdate({_id: request.query.user}, {$pull: {stocksTracking: request.body.symbol}},
+            {new: true}, (error, user) => {
+                if (error) return response.status(500).send({status: 2});
+                else return response.status(200).send();
+        })
+    })
 
 // export the router to be used by server
 module.exports = router;
