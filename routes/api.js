@@ -126,20 +126,18 @@ function verifyTokenAuth(request, response, next){
     }
 }
 
-// get the list of subscribed stocks by username
-router.get('/userlist', verifyTokenAuth, (request, response) => {
-    //const placeholderForBelow = 'spaulsteinberg12';
-    // GET /something?color1=red&color2=blue
-    // ^^^ access parameters with 'query'....ex: req.query.color1 === 'red'
-    User.findById({_id: request.query.user})
+router.route('/stock')
+    .get(verifyTokenAuth, async (request, response) => {
+        //const placeholderForBelow = 'spaulsteinberg12';
+        // GET /something?color1=red&color2=blue
+        // ^^^ access parameters with 'query'....ex: req.query.color1 === 'red'
+        User.findById({_id: request.query.user})
         .select('stocksTracking -_id')
         .exec(function(err, user){
             if (err) response.status(500).send({status: 1});
             else return response.json(user);
         })
-})
-
-router.route('/stock')
+    })
     .patch(verifyTokenAuth, async (request, response) => {
         User.findById({_id : request.query.user}, (error, user) => {
             console.log(user);
