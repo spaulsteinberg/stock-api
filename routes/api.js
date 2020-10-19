@@ -110,6 +110,16 @@ router.post('/login', (request, response) => {
     })
 })
 
+router.get('/whoami', verifyTokenAuth, async (request, response) => {
+    User.findById({_id: request.query.user})
+        .select('username -_id')
+        .exec(function(err, user){
+            console.log(err, user);
+            if (err) response.status(500).send({status: 1});
+            else return response.json(user);
+        })
+})
+
 //verify token auth, split at space to get Bearer token, next tells express we are done here and to move on
 function verifyTokenAuth(request, response, next){
     if (!request.headers.authorization){
