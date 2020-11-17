@@ -9,11 +9,18 @@ const { request } = require('express');
 const fs = require('fs');
 const readline = require('readline');
 const db = "mongodb+srv://chunkles_berg74:56E0sC8TJzvIJh3H@stocks.wfo6x.mongodb.net/users?retryWrites=true&w=majority"
+const db2 = "mongodb+srv://chunkles_berg74:56E0sC8TJzvIJh3H@stocks.wfo6x.mongodb.net/accounts?retryWrites=true&w=majority";
 const secret_key = nanoid();
 // connect to mongodb hosted on mlab
 mongoose.connect(db, {useNewUrlParser: true, useUnifiedTopology: true}, err => {
-    console.log(err ? err : "Connected to mongodb");
+    console.log(err ? err : "User db connected");
 })
+
+//create new connection on a different db from users
+const conn = mongoose.createConnection(db2, {useNewUrlParser: true, useUnifiedTopology: true, useCreateIndex: true}, err =>{
+    console.log(err ? err : "Accounts db connected");
+})
+const Account = conn.model('account', require('../models/account'), 'account-collection')
 
 // root of the routes
 router.get('/', (request, response) => {
@@ -170,6 +177,46 @@ router.route('/stock')
                 else return response.status(200).send();
         })
     })
+
+router.route('/account')
+    .post( async (request, response) => {
+        try {
+            Account.findOne({username: request.body.username}, async (error, user) => {
+                if (error){
+                    console.log(error);
+                    response.status(500).send({status: 500, msg: "Internal server error"});
+                }
+                else if (user) {
+                    console.log(user)
+                    response.status(401).send({status: 401, msg: `Account already exists!`});
+                }
+                else {
+                    console.log(request.body)
+                    let account = new Account(request.body);
+                    await postPatchAccountResponse(account, response);
+                }
+            })
+        } catch (err){
+            console.log(err);
+            response.status(500).send({status: 500, msg: "Internal Server Error"});
+            throw err;
+        }
+    })
+   /* 1) find username 2) push onto the request body onto the accounts array
+   .patch( async (request, response) => {
+        Account.findOne
+    })*/
+
+async function postPatchAccountResponse(account, response){
+    await account.save()
+        .then(addedAccount => {
+            response.status(201).send({msg: 'New User and Account created'})
+            console.log(addedAccount)
+        })
+        .catch(err => {
+            response.status(400).send({status:400, msg: err})
+        })
+}
 
 // export the router to be used by server
 module.exports = router;
