@@ -17,7 +17,7 @@ mongoose.connect(db, {useNewUrlParser: true, useUnifiedTopology: true}, err => {
 })
 
 //create new connection on a different db from users
-const conn = mongoose.createConnection(db2, {useNewUrlParser: true, useUnifiedTopology: true, useCreateIndex: true}, err =>{
+const conn = mongoose.createConnection(db2, {useNewUrlParser: true, useUnifiedTopology: true, useCreateIndex: true, useFindAndModify: false}, err =>{
     console.log(err ? err : "Accounts db connected");
 })
 const Account = conn.model('account', require('../models/account'), 'account-collection')
@@ -178,13 +178,15 @@ router.route('/stock')
         })
     })
 
+// need POST, PATCH, GET, DELETE
 router.route('/account')
     .post( async (request, response) => {
+        console.log("POST ACCOUNT")
         try {
             Account.findOne({username: request.body.username}, async (error, user) => {
                 if (error){
                     console.log(error);
-                    response.status(500).send({status: 500, msg: "Internal server error"});
+                    response.status(500).send({status: 500, msg: "Internal server error", details: error});
                 }
                 else if (user) {
                     console.log(user)
@@ -193,7 +195,14 @@ router.route('/account')
                 else {
                     console.log(request.body)
                     let account = new Account(request.body);
-                    await postPatchAccountResponse(account, response);
+                    await account.save()
+                    .then(addedAccount => {
+                        response.status(201).send({msg: 'New User and Account created'})
+                        console.log(addedAccount)
+                    })
+                    .catch(err => {
+                        response.status(400).send({status:400, msg: err})
+                    })
                 }
             })
         } catch (err){
@@ -202,21 +211,74 @@ router.route('/account')
             throw err;
         }
     })
-   /* 1) find username 2) push onto the request body onto the accounts array
-   .patch( async (request, response) => {
-        Account.findOne
-    })*/
+    .patch( async (request, response) => {
+        const options = { new: true}
+        const filter = { username: request.body.username, accountNames: {$ne : request.body.name} }
+        const update =  { $push: { accounts: request.body.accounts, accountNames: request.body.name }};
+        try {
+            // do not await on db call because it is async in the function, awaiting will make two dup calls
+            Account.findOneAndUpdate(filter, update, options, async (error, user) => {
+                if (error) response.status(500).send({status: 500, msg: "Internal server error", details: error});
+                else if (!user) response.status(400).send({status: 400, msg: "Bad Request", details: `Account name: ${request.body.name} already exists.`});
+                else {
+                    console.log(request.body.accounts)
+                    console.log(user.accounts);
+                    response.status(200).send({status:200, details: user.accounts})
+                }
+            })
+        } catch(err) {
+            console.log(err);
+            response.status(500).send({status: 500, msg: "Internal Server Error", details: err});
+        }
+    })
+    .get( async (request, response) => {
+        Account.findOne({username: request.query.username}, async (error, user) => {
+            try {
+                if (error) response.status(500).send({status: 500, msg: "Internal server error", details: error});
+                else if (!user) response.status(204).send({status:204, msg: "No Content. User needs to create an account."});
+                else response.status(200).send({status: 200, msg: "Success", names: user.accountNames, details: user.accounts});
+            } catch (err){
+                console.log(err);
+                response.status(500).send({status: 500, msg: "Internal Server Error", details: err});
+            }
+        })
+    })
+    .delete( async (request, response) => {
+        const acc = request.query.name;
+        const options = {new: true};
+        const filter = {username: request.query.username};
+        const update = {$pull: {accounts: {name: acc}, accountNames: acc}};
+        Account.findOneAndUpdate(filter, update, options, async (error, user) => {
+            try {
+                if (error) response.status(500).send({status: 500, msg: "Internal server error", details: error});
+                else if (!user) response.status(400).send({status:400, msg: "Bad Request", details: "Could not find user or account name"});
+                else {
+                    console.log(user.accounts)
+                    response.status(200).send({status: 200, msg: "Deleted", details: `${acc} deleted`});
+                }
+            } catch (err){
+                console.log(err);
+                response.status(500).send({status: 500, msg: "Internal Server Error", details: err});
+            }
+        })
+    })
 
-async function postPatchAccountResponse(account, response){
-    await account.save()
-        .then(addedAccount => {
-            response.status(201).send({msg: 'New User and Account created'})
-            console.log(addedAccount)
-        })
-        .catch(err => {
-            response.status(400).send({status:400, msg: err})
-        })
-}
+// delete a profile
+router.delete('/remove/profile', async (request, response) => {
+    Account.findOneAndDelete({username: request.query.username}, async (error, user) => {
+        try {
+            if (error) {
+                console.log(error)
+                response.status(500).send({status: 500, msg: "Internal server error", details: error});
+            }
+            else if (!user) response.status(400).send({status:400, msg: "Bad Request", details: "Could not find user"});
+            else response.status(200).send({status: 200, msg: "Profile Deleted", details: `${user.username} deleted`});
+        } catch (err){
+            console.log(err);
+            response.status(500).send({status: 500, msg: "Internal Server Error", details: err});
+        }
+    })
+})
 
 // export the router to be used by server
 module.exports = router;
