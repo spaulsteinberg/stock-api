@@ -8,6 +8,10 @@ const bcrypt = require('bcryptjs');
 const { request } = require('express');
 const fs = require('fs');
 const readline = require('readline');
+const PositionData = require('../models/PositionData');
+const PositionAttributes = require('../models/PositionAttributes');
+const PositonAttributes = require('../models/PositionAttributes');
+const { resolve } = require('path');
 const db = "mongodb+srv://chunkles_berg74:56E0sC8TJzvIJh3H@stocks.wfo6x.mongodb.net/users?retryWrites=true&w=majority"
 const db2 = "mongodb+srv://chunkles_berg74:56E0sC8TJzvIJh3H@stocks.wfo6x.mongodb.net/accounts?retryWrites=true&w=majority";
 const secret_key = nanoid();
@@ -178,39 +182,8 @@ router.route('/stock')
         })
     })
 
-// need POST, PATCH, GET, DELETE
+// need PATCH, GET, DELETE
 router.route('/account')
-    .post( async (request, response) => {
-        console.log("POST ACCOUNT")
-        try {
-            Account.findOne({username: request.body.username}, async (error, user) => {
-                if (error){
-                    console.log(error);
-                    response.status(500).send({status: 500, msg: "Internal server error", details: error});
-                }
-                else if (user) {
-                    console.log(user)
-                    response.status(401).send({status: 401, msg: `Account already exists!`});
-                }
-                else {
-                    console.log(request.body)
-                    let account = new Account(request.body);
-                    await account.save()
-                    .then(addedAccount => {
-                        response.status(201).send({msg: 'New User and Account created'})
-                        console.log(addedAccount)
-                    })
-                    .catch(err => {
-                        response.status(400).send({status:400, msg: err})
-                    })
-                }
-            })
-        } catch (err){
-            console.log(err);
-            response.status(500).send({status: 500, msg: "Internal Server Error"});
-            throw err;
-        }
-    })
     .patch( async (request, response) => {
         const options = { new: true}
         const filter = { username: request.body.username, accountNames: {$ne : request.body.name} }
@@ -263,22 +236,183 @@ router.route('/account')
         })
     })
 
-// delete a profile
-router.delete('/remove/profile', async (request, response) => {
-    Account.findOneAndDelete({username: request.query.username}, async (error, user) => {
+// Create and delete profile
+router.route('/profile')
+    .post( async (request, response) => {
+        console.log("POST ACCOUNT")
         try {
-            if (error) {
-                console.log(error)
-                response.status(500).send({status: 500, msg: "Internal server error", details: error});
-            }
-            else if (!user) response.status(400).send({status:400, msg: "Bad Request", details: "Could not find user"});
-            else response.status(200).send({status: 200, msg: "Profile Deleted", details: `${user.username} deleted`});
+            Account.findOne({username: request.body.username}, async (error, user) => {
+                if (error){
+                    console.log(error);
+                    response.status(500).send({status: 500, msg: "Internal server error", details: error});
+                }
+                else if (user) {
+                    console.log(user)
+                    response.status(401).send({status: 401, msg: `Account already exists!`});
+                }
+                else {
+                    console.log(request.body)
+                    let account = new Account(request.body);
+                    await account.save()
+                    .then(addedAccount => {
+                        response.status(201).send({msg: 'New User and Account created'})
+                        console.log(addedAccount)
+                    })
+                    .catch(err => {
+                        response.status(400).send({status:400, msg: err})
+                    })
+                }
+            })
         } catch (err){
             console.log(err);
-            response.status(500).send({status: 500, msg: "Internal Server Error", details: err});
+            response.status(500).send({status: 500, msg: "Internal Server Error"});
+            throw err;
         }
+    })
+    .delete( async (request, response) => {
+        Account.findOneAndDelete({username: request.query.username}, async (error, user) => {
+            try {
+                if (error) {
+                    console.log(error)
+                    response.status(500).send({status: 500, msg: "Internal server error", details: error});
+                }
+                else if (!user) response.status(400).send({status:400, msg: "Bad Request", details: "Could not find user"});
+                else response.status(200).send({status: 200, msg: "Profile Deleted", details: `${user.username} deleted`});
+            } catch (err){
+                console.log(err);
+                response.status(500).send({status: 500, msg: "Internal Server Error", details: err});
+            }
     })
 })
 
+router.get('/account/list', async (request, response) => {
+    Account.findOne({username: request.headers.username}, async (error, user) => {
+        if (error) return response.status(500).send({status: 500, msg: "Internal server error", details: error});
+        else if (!user) return response.status(400).send({status: 400, msg: "Bad Request"})
+        else return response.status(200).send({status: 200, msg: "Success", details: user.accountNames})
+    })
+})
+
+router.route('/position')
+    .patch( async(request, response) => {
+        Account.findOne({username: request.body.username}, async (error, user) => {
+            const accountName = request.body.name;
+            const symbol = request.body.symbol;
+            const payload = request.body.data;
+            if (error) return response.status(500).send({status: 500, msg: "Internal server error", details: error});
+            else if (!user){
+                return response.status(400).send({status: 400, msg: "Bad Request"})
+            }
+            else {
+                // IF POSITION ALREADY EXISTS ADD ONTO THE POSITION
+                let i = 0; //hold index so we dont need to dup on create
+                let index = 0;
+                for (let acc of user.accounts){
+                    if (acc.name === accountName){
+                        index = i;
+                        for (let details of acc.data){
+                            if (details.symbol === symbol){
+                                console.log("EXISTING PUSH")
+                                details.values.push(payload);
+                                await user.save()
+                                .then (successData => {
+                                    return response.status(200).send({status: 200, msg: "Success", details: successData})
+                                })
+                                .catch(err => {
+                                    return response.status(500).send({status: 500, msg: "Internal Server Error", details: err})
+                                })
+                                return;
+                            }
+                        }
+                    }
+                    i++;
+                }
+                try {
+                    console.log("new", index)
+                    //populate structures and save...here if new stock
+                    const attributes = new PositonAttributes(payload.position, payload.dateOfBuy, payload.priceOfBuy);
+                    const data = new PositionData(symbol, [].concat(attributes)); //add values attribute as array
+                    user.accounts[index].data.push(data)
+                    console.log("ATTR:", attributes)
+                    console.log("DATA:", data)
+                    await user.save()
+                        .then (successData => {
+                            return response.status(200).send({status: 200, msg: "Success", details: successData})
+                        })
+                        .catch(err => {
+                            return response.status(500).send({status: 500, msg: "Internal Server Error", details: err})
+                        })
+                } catch (e){
+                    console.log(e);
+                    return response.status(500).send({status: 500, msg: "Internal Server Error", details: e})
+                }
+            }
+        })
+    })
+    .delete( async (request, response) => {
+        const accountName = request.body.name;
+        const symbol = request.body.data.symbol;
+        const position = request.body.data.position;
+        const date = request.body.data.dateOfBuy;
+        const price = request.body.data.priceOfBuy;
+        Account.findOne({username: request.headers.username}, async (error, user) => {
+            if (error) return response.status(500).send({status: 500, msg: "Internal server error", details: error});
+            else if (!user) return response.status(400).send({status: 400, msg: "Bad Request"})
+            else {
+                let result = await findPosition(user, accountName, symbol, position, date, price);
+                if (result !== -1) return response.status(200).send({status: 200, msg: "Success", details: result.accounts});
+                return response.status(200).send({status: 204, msg: "Not found"});
+            }
+        })
+    })
+    .get( async (request, response) => {
+        const filter = { username: request.headers.username}
+        Account.findOne(filter, async (error, user) => {
+            if (error) return response.status(500).send({status: 500, msg: "Internal server error", details: error});
+            else if (!user) return response.status(400).send({status: 400, msg: "Bad Request"});
+            else {
+                console.log(user)
+                for (let acc of user.accounts){
+                    console.log(`${acc.name} ---> ${request.body.name}`)
+                    if (acc.name === request.body.name){
+                        for (let data of acc.data){
+                            if (data.symbol === request.body.symbol){
+                                return response.status(200).send({status: 200, msg: "Success", symbol: data.symbol, details: data.values})
+                            }
+                        }
+                    }
+                }
+                return response.status(204).send({status: 204, msg: "No content"});
+            }
+        })
+    })
+
+async function findPosition(user, accountName, symbol, position, date, price){
+    //MUST CHECK IF THERE ARE NO POSITIONS LEFT. IF SO, DELETE THE SYMBOL/ETC DATA
+    for (let acc of user.accounts){
+        if (acc.name === accountName){
+            for (let data of acc.data){
+                if (data.symbol === symbol){
+                    for (let k = 0; k < data.values.length; k++){
+                        console.log(data.values[k])
+                        if (data.values[k].position === position
+                            && data.values[k].dateOfBuy === date
+                            && data.values[k].priceOfBuy === price){
+                                data.values.splice(k, 1);
+                                return await user.save()
+                                .then(savedUser => {
+                                    return Promise.resolve(savedUser)
+                                })
+                                .catch(err => {
+                                    return Promise.reject(err);
+                                })
+                            }
+                    }
+                }
+            }
+        }
+    }
+    return -1;
+}
 // export the router to be used by server
 module.exports = router;
