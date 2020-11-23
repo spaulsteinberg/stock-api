@@ -48,7 +48,7 @@ router.post('/register', (request, response) => {
                     .then(registeredUser => {
                         let payload = { subject: registeredUser._id };
                         let token = jwt.sign(payload, secret_key); //jwt.sign creates a new token...takes payload/secret key
-                        response.status(200).send({'token': token, 'id': registeredUser._id})
+                        response.status(201).send({'token': token, 'id': registeredUser._id})
                     })
                     .catch(error => {
                         response.status(400).send(error)
@@ -186,7 +186,7 @@ router.route('/stock')
 router.route('/account')
     .patch( async (request, response) => {
         const options = { new: true}
-        const filter = { username: request.body.username, accountNames: {$ne : request.body.name} }
+        const filter = { username: request.headers.username, accountNames: {$ne : request.body.name} }
         const update =  { $push: { accounts: request.body.accounts, accountNames: request.body.name }};
         try {
             // do not await on db call because it is async in the function, awaiting will make two dup calls
@@ -205,7 +205,7 @@ router.route('/account')
         }
     })
     .get( async (request, response) => {
-        Account.findOne({username: request.query.username}, async (error, user) => {
+        Account.findOne({username: request.headers.username}, async (error, user) => {
             try {
                 if (error) response.status(500).send({status: 500, msg: "Internal server error", details: error});
                 else if (!user) response.status(204).send({status:204, msg: "No Content. User needs to create an account."});
@@ -219,7 +219,7 @@ router.route('/account')
     .delete( async (request, response) => {
         const acc = request.query.name;
         const options = {new: true};
-        const filter = {username: request.query.username};
+        const filter = {username: request.headers.username};
         const update = {$pull: {accounts: {name: acc}, accountNames: acc}};
         Account.findOneAndUpdate(filter, update, options, async (error, user) => {
             try {
@@ -270,7 +270,7 @@ router.route('/profile')
         }
     })
     .delete( async (request, response) => {
-        Account.findOneAndDelete({username: request.query.username}, async (error, user) => {
+        Account.findOneAndDelete({username: request.headers.username}, async (error, user) => {
             try {
                 if (error) {
                     console.log(error)
@@ -295,7 +295,7 @@ router.get('/account/list', async (request, response) => {
 
 router.route('/position')
     .patch( async(request, response) => {
-        Account.findOne({username: request.body.username}, async (error, user) => {
+        Account.findOne({username: request.headers.username}, async (error, user) => {
             const accountName = request.body.name;
             const symbol = request.body.symbol;
             const payload = request.body.data;
@@ -314,14 +314,13 @@ router.route('/position')
                             if (details.symbol === symbol){
                                 console.log("EXISTING PUSH")
                                 details.values.push(payload);
-                                await user.save()
+                                return await user.save()
                                 .then (successData => {
                                     return response.status(200).send({status: 200, msg: "Success", details: successData})
                                 })
                                 .catch(err => {
                                     return response.status(500).send({status: 500, msg: "Internal Server Error", details: err})
                                 })
-                                return;
                             }
                         }
                     }
@@ -388,24 +387,21 @@ router.route('/position')
     })
 
 async function findPosition(user, accountName, symbol, position, date, price){
-    //MUST CHECK IF THERE ARE NO POSITIONS LEFT. IF SO, DELETE THE SYMBOL/ETC DATA
     for (let acc of user.accounts){
         if (acc.name === accountName){
-            for (let data of acc.data){
-                if (data.symbol === symbol){
-                    for (let k = 0; k < data.values.length; k++){
-                        console.log(data.values[k])
-                        if (data.values[k].position === position
-                            && data.values[k].dateOfBuy === date
-                            && data.values[k].priceOfBuy === price){
-                                data.values.splice(k, 1);
-                                return await user.save()
-                                .then(savedUser => {
-                                    return Promise.resolve(savedUser)
-                                })
-                                .catch(err => {
-                                    return Promise.reject(err);
-                                })
+            for (let i = 0; i < acc.data.length; i++){
+                if (acc.data[i].symbol === symbol){
+                    for (let k = 0; k < acc.data[i].values.length; k++){
+                        console.log(acc.data[i].values[k])
+                        if (acc.data[i].values[k].position === position
+                            && acc.data[i].values[k].dateOfBuy === date
+                            && acc.data[i].values[k].priceOfBuy === price){
+                                if (acc.data[i].values.length === 1){
+                                    return await saveUserPositionDataOnDelete(user, acc.data, i)
+                                }
+                                else {
+                                    return await saveUserPositionDataOnDelete(user, acc.data[i].values, k)
+                                }
                             }
                     }
                 }
@@ -413,6 +409,17 @@ async function findPosition(user, accountName, symbol, position, date, price){
         }
     }
     return -1;
+}
+
+async function saveUserPositionDataOnDelete(user, set, index){
+    set.splice(index, 1);
+    return await user.save()
+    .then(savedUser => {
+        return Promise.resolve(savedUser)
+    })
+    .catch(err => {
+        return Promise.reject(err);
+    })
 }
 // export the router to be used by server
 module.exports = router;
