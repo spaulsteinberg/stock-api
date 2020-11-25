@@ -334,7 +334,7 @@ router.route('/position')
                     user.accounts[index].data.push(data)
                     console.log("ATTR:", attributes)
                     console.log("DATA:", data)
-                    await user.save()
+                    return await user.save()
                         .then (successData => {
                             return response.status(200).send({status: 200, msg: "Success", details: successData})
                         })
