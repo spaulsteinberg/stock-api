@@ -241,7 +241,7 @@ router.route('/profile')
     .post( async (request, response) => {
         console.log("POST ACCOUNT")
         try {
-            Account.findOne({username: request.body.username}, async (error, user) => {
+            Account.findOne({username: request.headers.username}, async (error, user) => {
                 if (error){
                     console.log(error);
                     response.status(500).send({status: 500, msg: "Internal server error", details: error});
@@ -252,6 +252,7 @@ router.route('/profile')
                 }
                 else {
                     console.log(request.body)
+                    request.body.username = request.headers.username;
                     let account = new Account(request.body);
                     await account.save()
                     .then(addedAccount => {
@@ -269,18 +270,30 @@ router.route('/profile')
             throw err;
         }
     })
+    .get(verifyTokenAuth, async (request, response) => {
+        Account.findOne({username: request.headers.username}, {_id: 0, _v: 0}, async (error, user) => {
+            try {
+                console.log("IN GET")
+                if (error) response.status(500).send({status: 500, msg: "Internal server error", details: error});
+                else if (!user) return response.status(204).send({status: 204, msg: "User doesnt have a profile"})
+                else return response.status(200).send({status: 200, msg: "User has a profile", details: user})
+            } catch (err){
+                return response.status(500).send({status: 500, msg: "Internal Server Error", details: err});
+            }
+        })
+    })
     .delete( async (request, response) => {
         Account.findOneAndDelete({username: request.headers.username}, async (error, user) => {
             try {
                 if (error) {
                     console.log(error)
-                    response.status(500).send({status: 500, msg: "Internal server error", details: error});
+                    return response.status(500).send({status: 500, msg: "Internal server error", details: error});
                 }
-                else if (!user) response.status(400).send({status:400, msg: "Bad Request", details: "Could not find user"});
-                else response.status(200).send({status: 200, msg: "Profile Deleted", details: `${user.username} deleted`});
+                else if (!user) return response.status(400).send({status:400, msg: "Bad Request", details: "Could not find user"});
+                else return response.status(200).send({status: 200, msg: "Profile Deleted", details: `${user.username} deleted`});
             } catch (err){
                 console.log(err);
-                response.status(500).send({status: 500, msg: "Internal Server Error", details: err});
+                return response.status(500).send({status: 500, msg: "Internal Server Error", details: err});
             }
     })
 })
