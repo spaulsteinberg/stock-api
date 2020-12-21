@@ -5,13 +5,10 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/users');
 const {nanoid} = require('nanoid');
 const bcrypt = require('bcryptjs');
-const { request } = require('express');
 const fs = require('fs');
 const readline = require('readline');
 const PositionData = require('../models/PositionData');
 const PositionAttributes = require('../models/PositionAttributes');
-const PositonAttributes = require('../models/PositionAttributes');
-const { resolve } = require('path');
 const db = "mongodb+srv://chunkles_berg74:56E0sC8TJzvIJh3H@stocks.wfo6x.mongodb.net/users?retryWrites=true&w=majority"
 const db2 = "mongodb+srv://chunkles_berg74:56E0sC8TJzvIJh3H@stocks.wfo6x.mongodb.net/accounts?retryWrites=true&w=majority";
 const secret_key = nanoid();
@@ -208,8 +205,8 @@ router.route('/account')
         Account.findOne({username: request.headers.username}, async (error, user) => {
             try {
                 if (error) response.status(500).send({status: 500, msg: "Internal server error", details: error});
-                else if (!user) response.status(204).send({status:204, msg: "No Content. User needs to create an account."});
-                else response.status(200).send({status: 200, msg: "Success", names: user.accountNames, details: user.accounts});
+                else if (!user) response.status(404).send({status:404, msg: "No Content. User needs to create an account."});
+                else response.status(200).send({names: user.accountNames, details: user.accounts});
             } catch (err){
                 console.log(err);
                 response.status(500).send({status: 500, msg: "Internal Server Error", details: err});
@@ -275,7 +272,7 @@ router.route('/profile')
             try {
                 console.log("IN GET")
                 if (error) response.status(500).send({status: 500, msg: "Internal server error", details: error});
-                else if (!user) return response.status(204).send({status: 204, msg: "User doesnt have a profile"})
+                else if (!user) return response.status(404).send({status: 404, msg: "User doesnt have a profile"})
                 else return response.status(200).send({status: 200, msg: "User has a profile", details: user})
             } catch (err){
                 return response.status(500).send({status: 500, msg: "Internal Server Error", details: err});
@@ -298,7 +295,7 @@ router.route('/profile')
     })
 })
 
-router.get('/account/list', async (request, response) => {
+router.get('/account/list', verifyTokenAuth, async (request, response) => {
     Account.findOne({username: request.headers.username}, async (error, user) => {
         if (error) return response.status(500).send({status: 500, msg: "Internal server error", details: error});
         else if (!user) return response.status(400).send({status: 400, msg: "Bad Request"})
@@ -329,7 +326,7 @@ router.route('/position')
                                 details.values.push(payload);
                                 return await user.save()
                                 .then (successData => {
-                                    return response.status(200).send({status: 200, msg: "Success", details: successData})
+                                    return response.status(200).send({status: 200, msg: "Success", details: successData.accounts})
                                 })
                                 .catch(err => {
                                     return response.status(500).send({status: 500, msg: "Internal Server Error", details: err})
@@ -342,14 +339,15 @@ router.route('/position')
                 try {
                     console.log("new", index)
                     //populate structures and save...here if new stock
-                    const attributes = new PositonAttributes(payload.position, payload.dateOfBuy, payload.priceOfBuy);
+                    console.log(payload.position, payload.dateOfBuy, payload.priceOfBuy)
+                    const attributes = new PositionAttributes(payload.position, payload.dateOfBuy, payload.priceOfBuy);
                     const data = new PositionData(symbol, [].concat(attributes)); //add values attribute as array
                     user.accounts[index].data.push(data)
                     console.log("ATTR:", attributes)
                     console.log("DATA:", data)
                     return await user.save()
                         .then (successData => {
-                            return response.status(200).send({status: 200, msg: "Success", details: successData})
+                            return response.status(200).send({status: 200, msg: "Success", details: successData.accounts})
                         })
                         .catch(err => {
                             return response.status(500).send({status: 500, msg: "Internal Server Error", details: err})
@@ -362,18 +360,23 @@ router.route('/position')
         })
     })
     .delete( async (request, response) => {
-        const accountName = request.body.name;
-        const symbol = request.body.data.symbol;
-        const position = request.body.data.position;
-        const date = request.body.data.dateOfBuy;
-        const price = request.body.data.priceOfBuy;
+        const accountName = request.query.name;
+        const symbol = request.query.symbol.toUpperCase();
+        const position = request.query.position;
+        const date = request.query.date;
+        const price = request.query.price;
         Account.findOne({username: request.headers.username}, async (error, user) => {
             if (error) return response.status(500).send({status: 500, msg: "Internal server error", details: error});
             else if (!user) return response.status(400).send({status: 400, msg: "Bad Request"})
             else {
-                let result = await findPosition(user, accountName, symbol, position, date, price);
-                if (result !== -1) return response.status(200).send({status: 200, msg: "Success", details: result.accounts});
-                return response.status(200).send({status: 204, msg: "Not found"});
+                try {
+                    let result = await findPosition(user, accountName, symbol, position, date, price);
+                    if (result !== -1) return response.status(200).send({status: 200, msg: "Success", details: result.accounts});
+                    return response.status(404).send({status: 404, msg: "Not found"});
+                }
+                catch (err){
+                    return response.status(500).send({status: 500, msg: "Internal server error on delete", details: error})
+                }
             }
         })
     })
@@ -394,21 +397,23 @@ router.route('/position')
                         }
                     }
                 }
-                return response.status(204).send({status: 204, msg: "No content"});
+                return response.status(404).send({status: 404, msg: "No content"});
             }
         })
     })
 
 async function findPosition(user, accountName, symbol, position, date, price){
+    console.log(`Account Name: ${accountName}, Symbol: ${symbol}, Position: ${position}, date: ${date}, price: ${price}`)
     for (let acc of user.accounts){
         if (acc.name === accountName){
             for (let i = 0; i < acc.data.length; i++){
                 if (acc.data[i].symbol === symbol){
                     for (let k = 0; k < acc.data[i].values.length; k++){
                         console.log(acc.data[i].values[k])
-                        if (acc.data[i].values[k].position === position
-                            && acc.data[i].values[k].dateOfBuy === date
-                            && acc.data[i].values[k].priceOfBuy === price){
+                        if (acc.data[i].values[k].position == position
+                            && acc.data[i].values[k].dateOfBuy == date
+                            && acc.data[i].values[k].priceOfBuy == price){
+                                //delete whole position if there is one left
                                 if (acc.data[i].values.length === 1){
                                     return await saveUserPositionDataOnDelete(user, acc.data, i)
                                 }
