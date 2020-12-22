@@ -317,13 +317,22 @@ router.route('/position')
                 // IF POSITION ALREADY EXISTS ADD ONTO THE POSITION
                 let i = 0; //hold index so we dont need to dup on create
                 let index = 0;
+                let samePrice = false;
                 for (let acc of user.accounts){
                     if (acc.name === accountName){
                         index = i;
                         for (let details of acc.data){
                             if (details.symbol === symbol){
                                 console.log("EXISTING PUSH")
-                                details.values.push(payload);
+                                for (let vals of details.values){
+                                    console.log(vals.priceOfBuy, payload.priceOfBuy)
+                                    if (vals.priceOfBuy === payload.priceOfBuy && vals.dateOfBuy === payload.dateOfBuy){
+                                        samePrice = true;
+                                        vals.position += payload.position;
+                                        break;
+                                    }
+                                }
+                                if (!samePrice) details.values.push(payload);
                                 return await user.save()
                                 .then (successData => {
                                     return response.status(200).send({status: 200, msg: "Success", details: successData.accounts})
