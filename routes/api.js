@@ -193,7 +193,8 @@ router.route('/account')
                 else {
                     console.log(request.body.accounts)
                     console.log(user.accounts);
-                    response.status(200).send({status:200, details: user.accounts})
+                    const resp = user.accounts.find(_ => _.name === request.body.name)
+                    response.status(200).send({status:200, details: resp})
                 }
             })
         } catch(err) {
