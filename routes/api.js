@@ -181,7 +181,7 @@ router.route('/stock')
 
 // need PATCH, GET, DELETE
 router.route('/account')
-    .patch( async (request, response) => {
+    .patch(verifyTokenAuth, async (request, response) => {
         const options = { new: true}
         const filter = { username: request.headers.username, accountNames: {$ne : request.body.name} }
         const update =  { $push: { accounts: request.body.accounts, accountNames: request.body.name }};
@@ -202,7 +202,7 @@ router.route('/account')
             response.status(500).send({status: 500, msg: "Internal Server Error", details: err});
         }
     })
-    .get( async (request, response) => {
+    .get(verifyTokenAuth, async (request, response) => {
         Account.findOne({username: request.headers.username}, async (error, user) => {
             try {
                 if (error) response.status(500).send({status: 500, msg: "Internal server error", details: error});
@@ -214,7 +214,7 @@ router.route('/account')
             }
         })
     })
-    .delete( async (request, response) => {
+    .delete(verifyTokenAuth, async (request, response) => {
         const acc = request.query.name;
         const options = {new: true};
         const filter = {username: request.headers.username};
@@ -236,7 +236,7 @@ router.route('/account')
 
 // Create and delete profile
 router.route('/profile')
-    .post( async (request, response) => {
+    .post(verifyTokenAuth, async (request, response) => {
         console.log("POST ACCOUNT")
         try {
             Account.findOne({username: request.headers.username}, async (error, user) => {
@@ -280,7 +280,7 @@ router.route('/profile')
             }
         })
     })
-    .delete( async (request, response) => {
+    .delete(verifyTokenAuth, async (request, response) => {
         Account.findOneAndDelete({username: request.headers.username}, async (error, user) => {
             try {
                 if (error) {
@@ -305,7 +305,7 @@ router.get('/account/list', verifyTokenAuth, async (request, response) => {
 })
 
 router.route('/position')
-    .patch( async(request, response) => {
+    .patch(verifyTokenAuth, async(request, response) => {
         Account.findOne({username: request.headers.username}, async (error, user) => {
             const accountName = request.body.name;
             const symbol = request.body.symbol;
@@ -369,7 +369,7 @@ router.route('/position')
             }
         })
     })
-    .delete( async (request, response) => {
+    .delete(verifyTokenAuth, async (request, response) => {
         const accountName = request.query.name;
         const symbol = request.query.symbol.toUpperCase();
         const position = request.query.position;
@@ -390,7 +390,7 @@ router.route('/position')
             }
         })
     })
-    .get( async (request, response) => {
+    .get(verifyTokenAuth, async (request, response) => {
         const filter = { username: request.headers.username}
         Account.findOne(filter, async (error, user) => {
             if (error) return response.status(500).send({status: 500, msg: "Internal server error", details: error});
