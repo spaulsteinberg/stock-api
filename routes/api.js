@@ -239,7 +239,7 @@ router.route('/profile')
     .post(verifyTokenAuth, async (request, response) => {
         console.log("POST ACCOUNT")
         try {
-            Account.findOne({username: request.headers.username}, async (error, user) => {
+            Account.findOne({username: request.headers.username}, { '_id': 0, '__v': 0, 'username': 0}, async (error, user) => {
                 if (error){
                     console.log(error);
                     response.status(500).send({status: 500, msg: "Internal server error", details: error});
@@ -254,7 +254,7 @@ router.route('/profile')
                     let account = new Account(request.body);
                     await account.save()
                     .then(addedAccount => {
-                        response.status(201).send({msg: 'New User and Account created'})
+                        response.status(201).send({status: 200, msg: 'New User and Account created', details: addedAccount})
                         console.log(addedAccount)
                     })
                     .catch(err => {
@@ -269,7 +269,7 @@ router.route('/profile')
         }
     })
     .get(verifyTokenAuth, async (request, response) => {
-        Account.findOne({username: request.headers.username}, {_id: 0, _v: 0}, async (error, user) => {
+        Account.findOne({username: request.headers.username}, {_id: 0, __v: 0}, async (error, user) => {
             try {
                 console.log("IN GET")
                 if (error) response.status(500).send({status: 500, msg: "Internal server error", details: error});
@@ -296,7 +296,7 @@ router.route('/profile')
     })
 })
 
-router.get('/account/list', verifyTokenAuth, async (request, response) => {
+router.get('/profile/exists', verifyTokenAuth, async (request, response) => {
     Account.findOne({username: request.headers.username}, async (error, user) => {
         if (error) return response.status(500).send({status: 500, msg: "Internal server error", details: error});
         else if (!user) return response.status(400).send({status: 400, msg: "Bad Request"})
