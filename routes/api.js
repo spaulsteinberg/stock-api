@@ -9,6 +9,7 @@ const fs = require('fs');
 const readline = require('readline');
 const PositionData = require('../models/PositionData');
 const PositionAttributes = require('../models/PositionAttributes');
+const CreateProfileResponse = require('../ResponseModels/CreateProfileResponse');
 const db = "mongodb+srv://chunkles_berg74:56E0sC8TJzvIJh3H@stocks.wfo6x.mongodb.net/users?retryWrites=true&w=majority"
 const db2 = "mongodb+srv://chunkles_berg74:56E0sC8TJzvIJh3H@stocks.wfo6x.mongodb.net/accounts?retryWrites=true&w=majority";
 const secret_key = nanoid();
@@ -239,7 +240,7 @@ router.route('/profile')
     .post(verifyTokenAuth, async (request, response) => {
         console.log("POST ACCOUNT")
         try {
-            Account.findOne({username: request.headers.username}, { '_id': 0, '__v': 0, 'username': 0}, async (error, user) => {
+            Account.findOne({username: request.headers.username}, { _id: 0, __v: 0}, async (error, user) => {
                 if (error){
                     console.log(error);
                     response.status(500).send({status: 500, msg: "Internal server error", details: error});
@@ -254,11 +255,11 @@ router.route('/profile')
                     let account = new Account(request.body);
                     await account.save()
                     .then(addedAccount => {
-                        response.status(201).send({status: 200, msg: 'New User and Account created', details: addedAccount})
                         console.log(addedAccount)
+                        return response.status(201).send(new CreateProfileResponse(201, addedAccount.accountNames, addedAccount.accounts));
                     })
                     .catch(err => {
-                        response.status(400).send({status:400, msg: err})
+                        return response.status(400).send({status:400, msg: err})
                     })
                 }
             })
