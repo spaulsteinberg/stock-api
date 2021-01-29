@@ -216,7 +216,7 @@ router.route('/account')
         })
     })
     .delete(verifyTokenAuth, async (request, response) => {
-        const acc = request.query.name;
+        const acc = decodeURI(request.query.name);
         const options = {new: true};
         const filter = {username: request.headers.username};
         const update = {$pull: {accounts: {name: acc}, accountNames: acc}};
