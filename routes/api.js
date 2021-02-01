@@ -286,13 +286,13 @@ router.route('/profile')
             try {
                 if (error) {
                     console.log(error)
-                    return response.status(500).send({status: 500, msg: "Internal server error", details: error});
+                    return response.status(500).send({status: 500, msg: "Internal server error", details: ""});
                 }
                 else if (!user) return response.status(400).send({status:400, msg: "Bad Request", details: "Could not find user"});
                 else return response.status(200).send({status: 200, msg: "Profile Deleted", details: `${user.username} deleted`});
             } catch (err){
                 console.log(err);
-                return response.status(500).send({status: 500, msg: "Internal Server Error", details: err});
+                return response.status(500).send({status: 500, msg: "Internal Server Error", details: ""});
             }
     })
 })
