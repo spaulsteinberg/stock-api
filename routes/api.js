@@ -10,6 +10,7 @@ const readline = require('readline');
 const PositionData = require('../models/PositionData');
 const PositionAttributes = require('../models/PositionAttributes');
 const CreateProfileResponse = require('../ResponseModels/CreateProfileResponse');
+const ErrorResponse = require('../ResponseModels/ErrorResponseModel');
 const db = "mongodb+srv://chunkles_berg74:56E0sC8TJzvIJh3H@stocks.wfo6x.mongodb.net/users?retryWrites=true&w=majority"
 const db2 = "mongodb+srv://chunkles_berg74:56E0sC8TJzvIJh3H@stocks.wfo6x.mongodb.net/accounts?retryWrites=true&w=majority";
 const secret_key = nanoid();
@@ -99,9 +100,9 @@ async function readNasdaq(){
 // If the user is not found or the passwords do not match send a 401 unauthorized response. Else, the login is a success
 router.post('/login', (request, response) => {
     User.findOne({username: request.body.username}, (error, user) => {
-        if (error) console.log("Error occurred.");
+        if (error) return response.status(500).send("Internal Server Error");
         else if (!user){
-            response.status(401).send("Incorrect username or password.");
+            return response.status(401).send("Incorrect username or password.");
         }
         else {
             // MUST be candidate and then what is stored in db
@@ -110,10 +111,26 @@ router.post('/login', (request, response) => {
                 else if (res){
                     let payload = { subject: user._id };
                     let token = jwt.sign(payload, secret_key);
-                    response.status(200).send({'token': token, 'id': user._id})
+                    return response.status(200).send({'token': token, 'id': user._id})
                 } else {
-                    response.status(401).send("Incorrect username or password.");
+                    return response.status(401).send("Incorrect username or password.");
                 }
+            })
+        }
+    })
+})
+
+router.post('/authorize/profile/delete', verifyTokenAuth, async (request, response) => {
+    const requestUsername = request.headers.user;
+    const requestPassword = request.headers.pass;
+    User.findOne({username: requestUsername}, (error, user) => {
+        if (error) return response.status(500).send(new ErrorResponse(500, "Internal Server Error"));
+        else if (!user) return response.status(401).send(new ErrorResponse(401, "Unauthorized", "Unauthorization error"));
+        else {
+            bcrypt.compare(requestPassword, user.password, (err, res) => {
+                if (err) return response.status(500).send(new ErrorResponse(500, "Internal Server Error"));
+                else if (!res) return response.status(401).send(new ErrorResponse(401, "Unauthorized", "Unauthorization error"));
+                else return response.status(200).send();
             })
         }
     })
