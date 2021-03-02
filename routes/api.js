@@ -102,7 +102,7 @@ router.post('/login', (request, response) => {
     User.findOne({username: request.body.username}, (error, user) => {
         if (error) return response.status(500).send("Internal Server Error");
         else if (!user){
-            return response.status(401).send("Incorrect username or password.");
+            return response.status(401).send({status: 2});
         }
         else {
             // MUST be candidate and then what is stored in db
@@ -113,7 +113,7 @@ router.post('/login', (request, response) => {
                     let token = jwt.sign(payload, secret_key);
                     return response.status(200).send({'token': token, 'id': user._id})
                 } else {
-                    return response.status(401).send("Incorrect username or password.");
+                    return response.status(401).send({status: 2});
                 }
             })
         }
