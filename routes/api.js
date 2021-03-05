@@ -11,8 +11,10 @@ const PositionData = require('../models/PositionData');
 const PositionAttributes = require('../models/PositionAttributes');
 const CreateProfileResponse = require('../ResponseModels/CreateProfileResponse');
 const ErrorResponse = require('../ResponseModels/ErrorResponseModel');
-const db = "mongodb+srv://chunkles_berg74:56E0sC8TJzvIJh3H@stocks.wfo6x.mongodb.net/users?retryWrites=true&w=majority"
-const db2 = "mongodb+srv://chunkles_berg74:56E0sC8TJzvIJh3H@stocks.wfo6x.mongodb.net/accounts?retryWrites=true&w=majority";
+const confidential = require("../confidential/confidential");
+
+const db = confidential.DB_INFO.USER_DB;
+const db2 = confidential.DB_INFO.ACCOUNT_DB;
 const secret_key = nanoid();
 // connect to mongodb hosted on mlab
 mongoose.connect(db, {useNewUrlParser: true, useUnifiedTopology: true}, err => {
