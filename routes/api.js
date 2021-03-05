@@ -467,5 +467,14 @@ async function saveUserPositionDataOnDelete(user, set, index){
         return Promise.reject(err);
     })
 }
+
+process.on('SIGINT', () => {
+    mongoose.disconnect();
+    console.log("user db disconnected")
+    conn.close(() => {
+        console.log("account db disconnected");
+        process.exit(0)
+    });
+})
 // export the router to be used by server
 module.exports = router;
