@@ -468,8 +468,9 @@ async function saveUserPositionDataOnDelete(user, set, index){
     })
 }
 
-process.on('SIGINT', () => {
-    mongoose.disconnect();
+// close connections on exiting
+process.on('SIGINT', async () => {
+    await mongoose.disconnect();
     console.log("user db disconnected")
     conn.close(() => {
         console.log("account db disconnected");
